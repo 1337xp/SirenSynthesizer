@@ -3,7 +3,7 @@ A tool to synthesize siren tones, mostly directed at electromechanical types but
 
 Note: This tool is in a development phase. Major changes can come anytime and can change anything. Final product might come in a few months to a year max.
 
-FEATURES -----   
+# FEATURES
 *Additive and Subtractive synthesis to freely make any sort of siren tone   
 Multiple sweep types, with complete variable rate control.   
 (Logarithmic, Quadratic and Linear.)   
