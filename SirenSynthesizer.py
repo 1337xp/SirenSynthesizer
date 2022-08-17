@@ -3,32 +3,23 @@ import random as rnd
 from scipy.io.wavfile import write
 from scipy import signal
 from scipy.signal import butter, lfilter, freqz
-from pysndfx import AudioEffectsChain
-
-fx = (
-    AudioEffectsChain()
-    .highshelf()
-    .reverb()
-    .phaser()
-    .delay()
-    .lowshelf()
-)
+from pedalboard import Pedalboard, Reverb, Distortion, Limiter, Compressor, Gain, Chorus, LadderFilter, Phaser, Reverb
 fs = 44100
 RATE = 30
 hilo = True
-rpm = 2880
-hz = 50
+rpm = 3450
+hz = 60
 hilorate = 0.4
-windup_time = 5
-motortype = "3ph"
-still_time = 10
-winddown_time = 50
+windup_time = 7
+motortype = "1ph"
+still_time = 2.5
+winddown_time = 45
 totaltime = windup_time + still_time
 
-ports = [10, 12]
+ports = [8, 12]
 
 # 0 = Alert, 1 = Attack, 2 = HiLo, 3 = Pulse, 4 = Wailing HiLo, 5 = Wailing Pulse
-FScontroller = 4
+FScontroller = 1
 
 def risecurve(time: float = 10, rpm: float = None, type = "1ph", ports: int = 10, hz: int = 60):
     n = int(time * fs)
@@ -102,7 +93,7 @@ if FScontroller <= 3:
         x = np.append(x,-fallcurve(time=winddown_time, rpm=rpm, type="1ph", ports=ports[1])[:int((winddown_time * fs) / 6)])
         # 2.1 for 3ph and 2.9 for 1ph
 
-        x1 = np.append(risecurve(rpm=rpm, time=windup_time, ports=ports[1], type=motortype)[int((windup_time * fs) / 2.1):],
+        x1 = np.append(risecurve(rpm=rpm, time=windup_time, ports=ports[1], type=motortype)[int((windup_time * fs) / 2.9):],
                   -fullrpm(rpm=rpm, time=still_time, ports=ports[1]))
         x1 = np.append(x1, -fallcurve(time=winddown_time, rpm=rpm, type="1ph", ports=ports[1])[:int((winddown_time * fs) / 6)])
         for i in range(3):
@@ -110,7 +101,7 @@ if FScontroller <= 3:
         x = np.append(x, x1)
         y = np.append(risecurve(rpm=rpm,time=windup_time, ports=ports[0], type=motortype),-fullrpm(rpm=rpm,time=still_time, ports=ports[0]))
         y = np.append(y,-fallcurve(time=winddown_time, rpm=rpm, type="1ph", ports=ports[0])[:int((winddown_time * fs) / 6)])
-        y1 = np.append(risecurve(rpm=rpm, time=windup_time, ports=ports[0], type=motortype)[int((windup_time * fs) / 2.1):],
+        y1 = np.append(risecurve(rpm=rpm, time=windup_time, ports=ports[0], type=motortype)[int((windup_time * fs) / 2.9):],
                       -fullrpm(rpm=rpm, time=still_time, ports=ports[0]))
         if FScontroller == 2 or FScontroller == 3:
             y1 = y1 * hilo(y1.size, sus=1, rate=hilorate)
@@ -123,7 +114,7 @@ if FScontroller == 4 or FScontroller == 5:
     x = np.append(x,-fallcurve(time=winddown_time, rpm=rpm, type="1ph", ports=ports[1])[:int((winddown_time * fs) / 6)])
     # 2.1 for 3ph and 2.9 for 1ph
 
-    x1 = np.append(risecurve(rpm=rpm, time=windup_time, ports=ports[1], type=motortype)[int((windup_time * fs) / 2.1):],
+    x1 = np.append(risecurve(rpm=rpm, time=windup_time, ports=ports[1], type=motortype)[int((windup_time * fs) / 2.9):],
                 -fullrpm(rpm=rpm, time=still_time, ports=ports[1]))
     if FScontroller == 4:
         x1 = x1 * hilo(x1.size, sus=1, rate=hilorate)
@@ -136,7 +127,7 @@ if FScontroller == 4 or FScontroller == 5:
     x = np.append(x, x1)
     y = np.append(risecurve(rpm=rpm,time=windup_time, ports=ports[0], type=motortype),-fullrpm(rpm=rpm,time=still_time, ports=ports[0]))
     y = np.append(y,-fallcurve(time=winddown_time, rpm=rpm, type="1ph", ports=ports[0])[:int((winddown_time * fs) / 6)])
-    y1 = np.append(risecurve(rpm=rpm, time=windup_time, ports=ports[0], type=motortype)[int((windup_time * fs) / 2.1):],
+    y1 = np.append(risecurve(rpm=rpm, time=windup_time, ports=ports[0], type=motortype)[int((windup_time * fs) / 2.9):],
                     -fullrpm(rpm=rpm, time=still_time, ports=ports[0]))
     if FScontroller == 5 or FScontroller == 4:
         y1 = y1 * hilo(y1.size, sus=0, rate=hilorate)
@@ -158,7 +149,13 @@ def butter_lowpass_filter(data, cutoff, fs, order=5):
     b, a = butter_lowpass(cutoff, fs, order=order)
     y = lfilter(b, a, data)
     return y
-
+board = Pedalboard([
+    Compressor(threshold_db=-50, ratio=25),
+    Gain(gain_db=30),
+    LadderFilter(mode=LadderFilter.Mode.HPF12, cutoff_hz=900),
+    LadderFilter(mode=LadderFilter.Mode.LPF12, cutoff_hz=8800),
+    Reverb(room_size=1),
+])
 
 
 order = 2
@@ -177,5 +174,5 @@ y = butter_lowpass_filter(y, cutoff1, fs1, order)
 x = butter_lowpass_filter(x, cutoff1, fs1, order)
 x = x * ((butter_lowpass_filter(f(x14) + f(x13) * f(x12), 20, fs1, 1)/ 50) + 0.4) + y * ((butter_lowpass_filter(f(x12) + f(x13) * f(x14), 20, fs1, 1)/ 50) + 0.4)
 x = x * ((butter_lowpass_filter(f(x14) + f(x13) * f(x14), 20, fs1, 1)/ 48) + 0.3)
-x = fx(x)
-write("test3.wav", fs, x)
+effected = board(x, 44100)
+write("test3.wav", fs, effected)
